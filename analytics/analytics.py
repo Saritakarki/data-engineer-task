@@ -4,12 +4,13 @@ from time import sleep
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects.mysql import insert
 from geopy.distance import geodesic
 import ast
 import logging
 import sys
 
-from models import DeviceData, AggregatedData, mysql_base
+from models import DeviceData, AggregatedData, mysql_base, CHUNK_SIZE
 
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
 
@@ -30,12 +31,13 @@ class EtlProcess:
         sleep(20)
         logging.info('ETL Starting...')
         data = self.extract_data()
-        logging.info('Extracted Data From Database')
+        logging.info('Extracted Data From Database!')
         logging.info('Running Transformation...')
         transformed_data = self.transform_data(data)
         logging.info('Transformed Data!')
+        logging.info('Loading Data into Mysql...')
         self.load_data(transformed_data)
-        logging.info('Loaded Data into Mysql..')
+        logging.info('Loaded Data into Mysql!')
 
     def extract_data(self):
         # sql = '''SELECT * FROM devices'''
@@ -104,19 +106,34 @@ class EtlProcess:
         mysql_base.metadata.create_all(bind=self.mysql_engine)
         session = sessionmaker(bind=self.mysql_engine)
         mysql_session = session()
-
+        bulk_data = []
         for device_id, hourly_data in data['max_temps'].items():
             for hour, max_temp in hourly_data.items():
                 data_point_count = data['data_points'][device_id][hour]
                 distance = data['distance_movement'][device_id][hour]['distance']
-                aggregated_data = AggregatedData(device_id=device_id, hour=hour, max_temperature=max_temp,
-                                                 data_points=data_point_count, total_distance=distance)
-                mysql_session.merge(aggregated_data)
+                row_data = {
+                    'device_id': device_id,
+                    'hour': hour,
+                    'max_temperature': max_temp,
+                    'data_points': data_point_count,
+                    'total_distance': distance
+                }
+                bulk_data.append(row_data)
+
+        # Perform the bulk insert
+        print(len(bulk_data), 'We have this much data')
+        for i in range(0, len(bulk_data), CHUNK_SIZE):
+            chunk = bulk_data[i:i + CHUNK_SIZE]
+            stmt = insert(AggregatedData).values(chunk)
+            stmt = stmt.on_duplicate_key_update(
+                max_temperature=stmt.inserted.max_temperature,
+                data_points=stmt.inserted.data_points,
+                total_distance=stmt.inserted.total_distance
+            )
+            mysql_session.execute(stmt)
 
         mysql_session.commit()
         mysql_session.close()
-
-# Write the solution here
 
 
 if __name__ == '__main__':

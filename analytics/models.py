@@ -22,3 +22,6 @@ class DeviceData(psql_base):
     temperature = Column(Integer)
     location = Column(String(255))
     time = Column(String(255))
+
+
+CHUNK_SIZE = 1000  # can be adjusted

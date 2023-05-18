@@ -28,7 +28,7 @@ services:
       POSTGRESQL_CS: 'postgresql+psycopg2://postgres:password@psql_db:5432/main'
     depends_on:
       - psql_db
-#    command: ["python", "./main.py" ]
+    command: ["python", "./main.py" ]
   
   analytics:
     build:
@@ -41,6 +41,6 @@ services:
       - mysql_db
       - psql_db
       - main
-    command: ["python", "./analytics.py" ]
+#    command: ["python", "./analytics.py" ]
 
 
