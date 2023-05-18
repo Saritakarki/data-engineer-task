@@ -40,9 +40,6 @@ class EtlProcess:
         logging.info('Loaded Data into Mysql!')
 
     def extract_data(self):
-        # sql = '''SELECT * FROM devices'''
-        # result = self.connection.execute(text(sql)).all()
-        # # return result
         session = sessionmaker(bind=self.psql_engine)
         postgres_session = session()
         data = postgres_session.query(DeviceData).all()
